@@ -74,11 +74,6 @@ poetry install
 # macOS
 brew install graphviz
 
-# Ubuntu/Debian
-sudo apt-get install graphviz graphviz-dev
-
-# Fedora/RHEL
-sudo dnf install graphviz graphviz-devel
 ```
 
 ## Data and Models
