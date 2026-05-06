@@ -1,5 +1,5 @@
 """
-Script to generate plots in Figure 3.
+Script to generate plots supplementary.
 
 Combined test script for Z, ZZ, and Z_loop observables in 2D XXZ models.
 
