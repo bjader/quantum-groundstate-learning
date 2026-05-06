@@ -12,28 +12,36 @@ quantum-groundstate-learning/
 ├── qaml/                     # Core library
 │   ├── analysis/             # Data analysis utilities
 │   ├── diagonalisation/      # DMRG implementations
-│   ├── experiment/           # Experiment utilities
 │   ├── graph/                # Graph and lattice structures
-│   ├── ipr/                  # Inverse participation ratio
 │   ├── ml/                   # Machine learning modules
 │   ├── observables/          # Observable calculations
-│   ├── quantum_info/         # Quantum information tools
-│   ├── shadows/              # Classical shadow methods
-│   ├── shadows_rdm/          # Reduced density matrix shadows
-│   ├── skqd/                 # Shadow Krylov Quantum Diagonalization
+│   ├── skqd/                 # Sample-based Krylov Quantum Diagonalization
 │   ├── trotter_circuits/     # Trotterized circuit generation
 │   └── visualisation/        # Plotting and visualization
-├── utils/                    # Experiment utilities
+├── utils/                    # Utility functions
+├── cmaps/                    # Heavy-hex lattice connectivity maps
 ├── figures/                  # Figure generation scripts
+│   ├── fig1_overview/        # Figure 1 scripts
+│   ├── fig2_data_accuracy/   # Figure 2 scripts
+│   ├── fig3_in_distribution_ml/  # Figure 3 scripts
+│   ├── fig4_phase_boundary_ml/   # Figure 4 scripts
+│   └── supplementary/        # Supplementary figure scripts
 ├── ml_training/              # ML model training scripts
-├── ml_models/                # Trained ML models (downloaded from Box)
-└── data_generation/          # Data generation pipeline
-    ├── basis_optimization/   # Basis optimization scripts
-    ├── classical_simulation/ # Classical SKQD simulations
-    ├── dmrg/                 # DMRG reference calculations
-    ├── observables/          # Observable computation from SKQD
-    └── qpu/                  # QPU experiment submission and processing
+├── data_generation/          # Data generation pipeline
+│   ├── basis_optimization/   # Basis optimization scripts
+│   ├── classical_simulation/ # Classical SKQD simulations
+│   ├── dmrg/                 # DMRG reference calculations
+│   ├── observables/          # Observable computation from SKQD
+│   └── qpu/                  # QPU experiment submission and processing
+├── data/                     # Experimental data (downloaded from Box)
+│   ├── spins_57/             # 57-spin system data
+│   └── spins_115/            # 115-spin system data
+└── ml_models/                # Trained ML models (downloaded from Box)
+    ├── spins_57/             # Models for 57-spin system
+    └── spins_115/            # Models for 115-spin system
 ```
+
+**Note**: The `data/` and `ml_models/` directories are not included in the repository and must be downloaded separately from Box (see [Data and Models](#data-and-models) section).
 
 ## Installation
 
