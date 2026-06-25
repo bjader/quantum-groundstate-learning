@@ -1,7 +1,8 @@
 # Quantum Ground State Learning
 
-Code to reproduce "Deep learning of ground state observables from quantum computing experiments."
-arxiv.TODO
+Code to reproduce "Learning ground state observables from quantum computing experiments"
+
+https://arxiv.org/abs/2606.15983
 
 ## Repository Structure
 
@@ -136,7 +137,12 @@ This script creates a unified directory structure (`saved_opt_res_qpu_unified/`)
 ## Citation
 
 ```bibtex
-[Add citation here]
+@article{jaderberg2026learning,
+  title={Learning ground state observables from quantum computing experiments},
+  author={Jaderberg, Ben and Shah, Freya and Jeon, Minjun and Sahin, M Emre and Zoufal, Christa and Sharma, Kunal},
+  journal={arXiv preprint arXiv:2606.15983},
+  year={2026}
+}
 ```
 
 ## License
