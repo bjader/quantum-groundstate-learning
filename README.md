@@ -141,12 +141,4 @@ This script creates a unified directory structure (`saved_opt_res_qpu_unified/`)
 
 ## License
 
-[Add license]
-
-## Contact
-
-[Add contact information]
-
-## Acknowledgments
-
-This work was performed using IBM Quantum systems.
+This project uses the Apache License 2.0 - see [LICENSE](LICENSE).
