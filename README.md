@@ -30,19 +30,16 @@ quantum-groundstate-learning/
 ├── ml_training/              # ML model training scripts
 ├── data_generation/          # Data generation pipeline
 │   ├── basis_optimization/   # Basis optimization scripts
+│   │   └── saved_opt_res_qpu/ # Basis optimization results (needs to be generated)
 │   ├── classical_simulation/ # Classical SKQD simulations
 │   ├── dmrg/                 # DMRG reference calculations
 │   ├── observables/          # Observable computation from SKQD
 │   └── qpu/                  # QPU experiment submission and processing
-├── data/                     # Experimental data (downloaded from Box)
+├── data/                     # Experimental data
 │   ├── spins_57/             # 57-spin system data
 │   └── spins_115/            # 115-spin system data
-└── ml_models/                # Trained ML models (downloaded from Box)
-    ├── spins_57/             # Models for 57-spin system
-    └── spins_115/            # Models for 115-spin system
+└── ml_models/                # Trained ML models (needs to be generated)
 ```
-
-**Note**: The `data/` and `ml_models/` directories are not included in the repository and must be downloaded separately from Box (see [Data and Models](#data-and-models) section).
 
 ## Installation
 
@@ -56,7 +53,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Option 2: conda/mamba
+### Option 2: conda/conda-forge
 
 ```bash
 conda env create -f environment.yml
@@ -74,65 +71,89 @@ poetry install
 ```bash
 # macOS
 brew install graphviz
-
 ```
 
 ## Data and Models
 
-**Data and trained models are NOT included in this repository** due to their size. They must be downloaded separately from Box.
+Data containing ground state observables from hardware experiments is available under `/data/`.
 
-### Downloading from Box
+However, trained models and optimized basis parameters are not included in this repository due to their size. They can
+be generated using these instructions.
 
-All required data and models are hosted in the **QAML** IBM Box folder (owned by Christa Zoufal and Kunal Sharma).
+### ML models
 
-Download the following from the Box folder:
+The repository provides pipelines for training the two distinct neural network architectures evaluated in the paper. The scripts automatically loop across the core observables (`z_basis_opt`, `2_nn_corr_funcs_zz_basis_opt`, and `z_loop`) and adapt to available hardware acceleration (CUDA/MPS/CPU). 
 
-1. **`data/`** folder - Contains all experimental and simulation data
-   - `data/spins_57/` - 57-spin system data
-   - `data/spins_115/` - 115-spin system data
+Target system sizes (`n_qubits = 57` or `115`) can be modified via configuration variables at the top of the respective execution scripts.
+
+#### Architecture 2: Local-to-Global Network (Paper Default)
+This architecture maps global heavy-hex topologies to localized structural representation layers before computing comprehensive global properties.
+
+Execute the pipeline sequentially:
+1. **Hyperparameter Cross-Validation (5-Fold):**
+   ```bash
+   python ml_training/train_k_cross_val2_eff.py
+   ```
+2. **In-Distribution Training & Testing:**
+   ```bash
+   python ml_training/train2_all_obs.py
+   ```
+3. **Phase Boundary Extrapolation Training:**
+   ```bash
+   python ml_training/train_boundary2.py
+   ```
    
-2. **`ml_models/`** folder - Pre-trained ML models
-   - Architecture 1 and architecture 2 models
-   - Models for Z, ZZ, and Z-loop observables
-   - Both 57 and 115 spin systems
+#### Architecture 1: Global Baseline Network
+This baseline processes the complete system parameter space using a global uniform input layout.
 
-3. **`data_generation/basis_optimization/saved_opt_res_qpu/`** - Basis optimization results from QPU experiments
-   - Required for reproducing Figure 2 and supplementary figures
+Execute the pipeline sequentially:
+1. **Hyperparameter Grid Search:**
+   ```bash
+   python ml_training/train_k_cross_val.py
+   ```
+2. **In-Distribution Evaluation:**
+   ```bash
+   python ml_training/train.py
+   ```
+3. **Phase Boundary Profile Training:**
+   ```bash
+   python ml_training/train_boundary.py
+   ```
 
-**Box folder**: QAML (IBM Box, owned by Christa Zoufal and Kunal Sharma)
+### Basis optimization results
 
-### Setup After Download
+The basis-optimised observables that the ML model is trained on are already stored in `/data/`, which is sufficient for 
+many plots. However, to get certain plots from the paper (like the energy panel in Figure 2) you need to run basis 
+optimization to get the final energy.
 
-After downloading, place the folders in the repository root:
+Run the two-stage variational parameter refinement using the provided optimization execution script:
+
+```bash
+python data_generation/basis_optimization/energy_two_method_optimization_wt_betas.py
+```
+
+#### Key Script Arguments
+* `--edges_path`: Path to connectivity map text file (e.g., use `heavy_hex_edges_d_5.txt` for 57 qubits, `heavy_hex_edges_d_7.txt` for 115 qubits).
+* `--jz` : Target Hamiltonian anisotropy.
+* `--num_bs_opt`: Number of highly-weighted bitstrings filtered for Stage 1 optimization.
+* `--num_bs_opt_2`: Total bitstring sample space size evaluated during Stage 2 diagonalization.
+
+### Structure after generating models and running basis optimization
+
+After running the ML workflows and executing the basis optimization pipeline for each Jz, your local workspace directory tree will be structured as follows:
 
 ```
 quantum-groundstate-learning/
-├── data/                    # Downloaded from Box
+├── data/                    
 │   ├── spins_57/
 │   └── spins_115/
-├── ml_models/               # Downloaded from Box
+├── ml_models/               # Generated by training pipelines
 │   ├── spins_57/
 │   └── spins_115/
 └── data_generation/
     └── basis_optimization/
-        └── saved_opt_res_qpu/  # Downloaded from Box
+        └── saved_opt_res_qpu/  # Generated by optimization script
 ```
-
-### Creating Unified Structure for Basis Optimization Results
-
-**Important**: Before running Figure 2 or supplementary figure scripts that use basis optimization data, you must run:
-
-```bash
-cd data_generation/basis_optimization
-python create_unified_structure.py
-```
-
-This script creates a unified directory structure (`saved_opt_res_qpu_unified/`) with symbolic links that organize the basis optimization results with consistent naming conventions. This is required for:
-- `figures/fig2_data_accuracy/energy_vs_gap_combined_n57_n115.py`
-- `figures/fig2_data_accuracy/unified_obs_vs_dmrg_basis_opt.py`
-- `figures/fig2_data_accuracy/obs_vs_dmrg_z_loop_basis_opt_per_jz_vminmax.py`
-- `figures/supplementary/energy_vs_gap_combined_n57_n115_recovery_basis_opt_comparison.py`
-- Other scripts that reference basis optimization results
 
 ## Citation
 
@@ -144,6 +165,10 @@ This script creates a unified directory structure (`saved_opt_res_qpu_unified/`)
   year={2026}
 }
 ```
+
+## Data availability
+
+Models and data not included in the repository can be made avaialble upon reasonable request.
 
 ## License
 
