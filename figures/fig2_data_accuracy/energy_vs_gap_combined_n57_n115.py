@@ -5,21 +5,13 @@ and n=115 basis optimazion results in the same format.
 """
 
 import logging
-import sys
 from pathlib import Path
 
 import dill as pickle
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Fix for unpickling objects from original /qaml/ repo
-# Import the modules first, then create aliases for old paths
-import qaml.diagonalisation
-import qaml.diagonalisation.twod
-import qaml.diagonalisation.twod.dmrg
-sys.modules['diagonalisation'] = qaml.diagonalisation
-sys.modules['diagonalisation.twod'] = qaml.diagonalisation.twod
-sys.modules['diagonalisation.twod.dmrg'] = qaml.diagonalisation.twod.dmrg
+# Reduced DMRG/SKQD data are plain dicts, so no qaml unpickling shims are needed.
 
 # Configure matplotlib to use LaTeX for text rendering
 plt.rcParams.update({
@@ -78,18 +70,22 @@ def choose_run_dir(base: Path, pattern: str):
         return None
     return max(dirs, key=lambda p: p.stat().st_mtime)
 
-def load_vopt_stage2_data(n_spins, vopt_unified_path, dmrg_dir, timestamp, jz_range, postprocessing='random_flip'):
+def load_vopt_stage2_data(n_spins, skqd_dir, dmrg_dir, jz_range, postprocessing='random_flip'):
     """
-    Load variational optimization stage2 results for a given system size.
-    
+    Load the basis-optimised (after-vopt) energy directly from the reduced SKQD data.
+
+    The after-vopt energy is read from the ``final_global_energy`` key of each reduced
+    SKQD file (this is the script-faithful value, identical to the top-level
+    ``final_global_energy`` of the original stage2 basis-optimisation result). The DMRG
+    ground/excited energies come from the reduced DMRG files as plain dict keys.
+
     Args:
         n_spins: Number of spins (57 or 115)
-        vopt_unified_path: Path to unified variational optimization results
-        dmrg_dir: Path to DMRG reference data
-        timestamp: Timestamp for the QPU run
+        skqd_dir: Path to reduced SKQD data (recovery_{postprocessing})
+        dmrg_dir: Path to reduced DMRG reference data
         jz_range: Range of Jz values to process
         postprocessing: Postprocessing method ('random_flip' or 'post_select')
-    
+
     Returns:
         diff_to_gap: Dictionary mapping Jz to |E - E_DMRG| / gap
         energies: Dictionary mapping Jz to energy values
@@ -100,101 +96,79 @@ def load_vopt_stage2_data(n_spins, vopt_unified_path, dmrg_dir, timestamp, jz_ra
     energies = {}
     dmrg_ground = {}
     dmrg_excited = {}
-    
-    # Path to the n-specific subdirectory
-    n_dir = vopt_unified_path / f"n_{n_spins}"
-    if not n_dir.exists():
-        logging.error(f"Unified directory not found: {n_dir}")
-        return diff_to_gap
-    
-    # Both system sizes use the same energy key
+
+    if not skqd_dir.exists():
+        logging.error(f"SKQD directory not found: {skqd_dir}")
+        return diff_to_gap, energies, dmrg_ground, dmrg_excited
+
+    # After-vopt energy key stored in the reduced SKQD files
     energy_key = "final_global_energy"
-    
+
     for jz in jz_range:
-        # Load DMRG reference
+        # Load DMRG reference (reduced format: plain dict keys)
         dmrg_file = dmrg_dir / f"XXZ_2d_jz_{jz:.1f}.pkl"
         if not dmrg_file.exists():
             logging.warning(f"Missing DMRG data for n={n_spins}, Jz={jz:.1f}")
             continue
-        
+
         try:
             dmrg_res = load_pickle(dmrg_file)
-            dmrg_e = float(dmrg_res["result"].e)
-            e1 = float(dmrg_res["result"].e1)
+            dmrg_e = float(dmrg_res["ground_state_energy"])
+            e1 = float(dmrg_res["e1"])
         except Exception as ex:
             logging.warning(f"Failed to load DMRG for n={n_spins}, Jz={jz:.1f}: {ex}")
             continue
-        
+
         gap = e1 - dmrg_e
         if gap == 0:
             continue
-        
-        # For n=115, jz=3.3 uses a different timestamp (only for post_select)
-        if n_spins == 115 and abs(jz - 3.3) < 0.01 and postprocessing == 'post_select':
-            ts_to_use = 1773854302
-        else:
-            ts_to_use = timestamp
-        
-        # Find stage2 symlink in unified structure
-        stage2_link = n_dir / f"ts_{ts_to_use}_jz_{jz:.1f}_stage2_{postprocessing}"
-        
-        if not stage2_link.exists():
-            logging.warning(f"Missing vopt stage2 link for n={n_spins}, Jz={jz:.1f}, postprocessing={postprocessing}")
+
+        # After-vopt energy comes from the reduced SKQD file for this (n, jz, postprocessing)
+        skqd_file = skqd_dir / f"XXZ_2d_jz_{jz:.1f}.pkl"
+        if not skqd_file.exists():
+            logging.warning(f"Missing SKQD data for n={n_spins}, Jz={jz:.1f}, postprocessing={postprocessing}")
             continue
-        
-        # Determine which result file to use based on system size and postprocessing
-        if n_spins == 57 and postprocessing == 'random_flip':
-            # n=57 random_flip data uses res.pkl
-            result_file = stage2_link / "res.pkl"
-        else:
-            # n=115 random_flip and all post_select data use final_res.pkl
-            result_file = stage2_link / "final_res.pkl"
-        
-        if not result_file.exists():
-            logging.warning(f"Missing {result_file.name} for n={n_spins}, Jz={jz:.1f}, postprocessing={postprocessing}")
-            continue
-        
+
         try:
-            resq = load_pickle(result_file)
+            resq = load_pickle(skqd_file)
             if energy_key not in resq:
                 logging.warning(f"Missing key '{energy_key}' for n={n_spins}, Jz={jz:.1f}, postprocessing={postprocessing}")
                 continue
-            e_final = resq[energy_key]
+            e_final = float(resq[energy_key])
             diff_to_gap[jz] = abs((e_final - dmrg_e) / gap)
             energies[jz] = e_final
             dmrg_ground[jz] = dmrg_e
             dmrg_excited[jz] = e1
         except Exception as ex:
-            logging.warning(f"Failed to load vopt results for n={n_spins}, Jz={jz:.1f}, postprocessing={postprocessing}: {ex}")
+            logging.warning(f"Failed to load SKQD results for n={n_spins}, Jz={jz:.1f}, postprocessing={postprocessing}: {ex}")
             continue
-    
+
     return diff_to_gap, energies, dmrg_ground, dmrg_excited
 
 if __name__ == "__main__":
     
     # Configuration
     base_data = Path("../../data")
-    vopt_unified_path = Path("../../data_generation/basis_optimization/saved_opt_res_qpu_unified")
-    
-    # n=57 configuration
-    n57_dmrg_dir = base_data / "spins_57" / "dmrg" / "chi_max_320_trunc_1e-06"
-    n57_timestamp = 1773299045
+
+    # n=57 configuration (reduced SKQD + reduced DMRG)
+    n57_skqd_dir = base_data / "spins_57" / "skqd" / "recovery_random_flip"
+    n57_dmrg_dir = base_data / "spins_57" / "dmrg" / "chi_max_320_trunc_1e-06_reduced"
     n57_jz_range = [round(jz, 1) for jz in np.arange(1.1, 6.01, 0.1)]
-    
-    # n=115 configuration
-    n115_dmrg_dir = base_data / "spins_115" / "dmrg" / "chi_max_320_trunc_1e-06"
-    n115_timestamp = 1773150437
+
+    # n=115 configuration (reduced SKQD + reduced DMRG)
+    n115_skqd_dir = base_data / "spins_115" / "skqd" / "recovery_random_flip"
+    n115_dmrg_dir = base_data / "spins_115" / "dmrg" / "chi_max_320_trunc_1e-06_reduced"
     n115_jz_range = [round(jz, 1) for jz in np.arange(1.1, 6.01, 0.1)]
-    
+
     # Load data for both system sizes (random_flip only)
     logging.info("Loading n=57 data (random_flip)...")
     n57_diff, n57_energies, n57_dmrg_ground, n57_dmrg_excited = load_vopt_stage2_data(
-        57, vopt_unified_path, n57_dmrg_dir, n57_timestamp, n57_jz_range, postprocessing='random_flip'
+        57, n57_skqd_dir, n57_dmrg_dir, n57_jz_range, postprocessing='random_flip'
     )
 
     logging.info("Loading n=115 data (random_flip)...")
     n115_diff, n115_energies, n115_dmrg_ground, n115_dmrg_excited = load_vopt_stage2_data(
-        115, vopt_unified_path, n115_dmrg_dir, n115_timestamp, n115_jz_range, postprocessing='random_flip'
+        115, n115_skqd_dir, n115_dmrg_dir, n115_jz_range, postprocessing='random_flip'
     )
     
     # Create output directory

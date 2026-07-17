@@ -4,8 +4,6 @@ Figure 4 left panel
 Plot the energy gap between ground state and first excited state from DMRG calculations.
 Similar style to experiments/2d_xxz/dmrg_sampled_analysis/ipr_plot.py
 """
-import sys
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -13,13 +11,7 @@ from pathlib import Path
 import dill as pickle
 import logging
 
-# Fix for unpickling objects from original /qaml/ repo
-import qaml.diagonalisation
-import qaml.diagonalisation.twod
-import qaml.diagonalisation.twod.dmrg
-sys.modules['diagonalisation'] = qaml.diagonalisation
-sys.modules['diagonalisation.twod'] = qaml.diagonalisation.twod
-sys.modules['diagonalisation.twod.dmrg'] = qaml.diagonalisation.twod.dmrg
+# Reduced DMRG data are plain dicts, so no qaml unpickling shims are needed.
 
 # Configure matplotlib to use LaTeX for text rendering (manuscript style)
 plt.rcParams.update({
@@ -66,8 +58,8 @@ def load_gap_data(dmrg_dir: Path, jz_range):
         
         try:
             dmrg_res = load_pickle(dmrg_file)
-            e0 = float(dmrg_res["result"].e)
-            e1 = float(dmrg_res["result"].e1)
+            e0 = float(dmrg_res["ground_state_energy"])
+            e1 = float(dmrg_res["e1"])
             gap = e1 - e0
             
             jz_values.append(jz)
@@ -85,11 +77,11 @@ if __name__ == "__main__":
     output_dir = Path("plots/chi_320/gap")
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # n=57 configuration
-    n57_dmrg_dir = base_data / "spins_57" / "dmrg" / "chi_max_320_trunc_1e-06"
-    
-    # n=115 configuration
-    n115_dmrg_dir = base_data / "spins_115" / "dmrg" / "chi_max_320_trunc_1e-06"
+    # n=57 configuration (reduced DMRG)
+    n57_dmrg_dir = base_data / "spins_57" / "dmrg" / "chi_max_320_trunc_1e-06_reduced"
+
+    # n=115 configuration (reduced DMRG)
+    n115_dmrg_dir = base_data / "spins_115" / "dmrg" / "chi_max_320_trunc_1e-06_reduced"
     
     # Jz range (1.0 to 6.0 in steps of 0.1)
     jz_range = [round(jz, 1) for jz in np.arange(1.1, 6.01, 0.1)]

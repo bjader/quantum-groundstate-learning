@@ -4,7 +4,6 @@ Plot DMRG energy extrapolation to chi -> infinity for n=57 and n=115.
 """
 
 import logging
-import sys
 from pathlib import Path
 
 import dill as pickle
@@ -12,13 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-# Fix for unpickling objects from original /qaml/ repo
-import qaml.diagonalisation
-import qaml.diagonalisation.twod
-import qaml.diagonalisation.twod.dmrg
-sys.modules['diagonalisation'] = qaml.diagonalisation
-sys.modules['diagonalisation.twod'] = qaml.diagonalisation.twod
-sys.modules['diagonalisation.twod.dmrg'] = qaml.diagonalisation.twod.dmrg
+# Reduced DMRG data are plain dicts, so no qaml unpickling shims are needed.
 
 # Configure matplotlib to use LaTeX for text rendering (manuscript style)
 plt.rcParams.update({
@@ -96,22 +89,24 @@ def load_dmrg_energies(n_spins, chi_values, jz_values, trunc_cut=1e-6):
     energies_by_chi = {}
     
     for chi in chi_values:
-        dmrg_dir = base_data / f"spins_{n_spins}" / "dmrg" / f"chi_max_{chi}_trunc_{trunc_cut:.0e}"
-        
+        # NOTE: only the reduced chi=320 DMRG is provided; other chi require their own
+        # reduced folders (chi_max_{chi}_trunc_1e-06_reduced) to enable the chi extrapolation.
+        dmrg_dir = base_data / f"spins_{n_spins}" / "dmrg" / f"chi_max_{chi}_trunc_{trunc_cut:.0e}_reduced"
+
         if not dmrg_dir.exists():
             logging.warning(f"DMRG directory not found for n={n_spins}, chi={chi}")
             continue
-            
+
         energies = {}
         for jz in jz_values:
             dmrg_file = dmrg_dir / f"XXZ_2d_jz_{jz:.1f}.pkl"
-            
+
             if not dmrg_file.exists():
                 continue
-                
+
             try:
                 dmrg_res = load_pickle(dmrg_file)
-                energy = float(dmrg_res["result"].e)
+                energy = float(dmrg_res["ground_state_energy"])
                 energies[jz] = energy
             except Exception as ex:
                 logging.warning(f"Failed to load DMRG for n={n_spins}, chi={chi}, Jz={jz:.1f}: {ex}")

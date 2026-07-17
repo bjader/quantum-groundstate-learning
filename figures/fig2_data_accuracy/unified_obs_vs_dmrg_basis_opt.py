@@ -11,7 +11,6 @@ Key features:
 """
 
 import os
-import sys
 from pathlib import Path
 import dill as pickle
 import matplotlib.pyplot as plt
@@ -22,16 +21,9 @@ from matplotlib.patches import Polygon
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from networkx.drawing.nx_agraph import graphviz_layout
 
-# Fix for unpickling objects from original /qaml/ repo
-import qaml.diagonalisation
-import qaml.diagonalisation.twod
-import qaml.diagonalisation.twod.dmrg
-sys.modules['diagonalisation'] = qaml.diagonalisation
-sys.modules['diagonalisation.twod'] = qaml.diagonalisation.twod
-sys.modules['diagonalisation.twod.dmrg'] = qaml.diagonalisation.twod.dmrg
-
+# Reduced DMRG data are plain dicts with heavy-hex-ordered observables, so no qaml
+# unpickling shims or MPS reordering helpers are needed.
 from qaml.analysis.analysis_utils import corrs_to_matrix, filter_to_less_neighbours
-from qaml.diagonalisation.twod.dmrg import DMRGResult, inverse_order_single_site_obs, inverse_order_two_site_list
 from qaml.graph.graph_utils import read_edges_txt
 
 # Configure matplotlib to use LaTeX for text rendering
@@ -55,13 +47,13 @@ plt.rcParams.update({
 
 DATASETS = {
     57: {
-        'root_dir_skqd': '../../data/spins_57/skqd/ts_1_kd_11_shots_100k_ibm_boston_1773299045/recovery_random_flip',
+        'root_dir_skqd': '../../data/spins_57/skqd/recovery_random_flip',
         'heavy_hex_distance': 5,
         'edges_path': '../../cmaps/heavy_hex_edges_d_5.txt',
         'chi_max': 320,  # Use chi=320 for n=57
     },
     115: {
-        'root_dir_skqd': '../../data/spins_115/skqd/ts_1_kd_11_shots_100k_ibm_boston_1773150437_1773854302_mixed/recovery_random_flip',
+        'root_dir_skqd': '../../data/spins_115/skqd/recovery_random_flip',
         'heavy_hex_distance': 7,
         'edges_path': '../../cmaps/heavy_hex_edges_d_7.txt',
         'chi_max': 320,  # Use chi=320 for n=115
@@ -153,38 +145,6 @@ def plot_loops_heavy_hex(edges, n, loops, loop_vals, cmap=plt.cm.Blues,
     ax.set_axis_off()
     return fig
 
-def compute_dmrg_loop_if_missing(data_dmrg, dmrg_result, loops_old, key="z_loop", operator="Sz"):
-    """Compute DMRG loop observables if not already present."""
-    if key in data_dmrg and f"{key}_sites" in data_dmrg:
-        return np.asarray(data_dmrg[key]), list(data_dmrg[f"{key}_sites"])
-
-    print(f"No DMRG {key} data found, computing...")
-
-    psi = dmrg_result.psi
-    n = psi.L
-    order = dmrg_result.bfs_order
-
-    pos = np.empty(n, dtype=int)
-    for new, old in enumerate(order):
-        pos[int(old)] = int(new)
-
-    corrs = []
-    scale = 2 ** len(loops_old[0])  # S = Pauli/2 => Pauli^⊗k = 2^k S^⊗k
-
-    for loop in loops_old:
-        loop_chain = [int(pos[i]) for i in loop]
-        loop_chain.sort()
-        term = [(operator, i) for i in loop_chain]
-        val = psi.expectation_value_term(term) * scale
-        corrs.append(val)
-
-    corrs = np.asarray(corrs)
-    data_dmrg[key] = corrs
-    data_dmrg[f"{key}_sites"] = loops_old
-
-    print(f"max |{key}| =", float(np.max(np.abs(corrs))))
-    return corrs, loops_old
-
 # ============================================================================
 # Data loading and processing
 # ============================================================================
@@ -193,7 +153,7 @@ def load_data_for_system(n, config, jzs):
     """Load SKQD and DMRG data for a given system size."""
     root_dir_skqd = config['root_dir_skqd']
     chi_max = config['chi_max']
-    root_dir_dmrg = f"../../data/spins_{n}/dmrg/chi_max_{chi_max:d}_trunc_{TRUNC_CUT:.0e}"
+    root_dir_dmrg = f"../../data/spins_{n}/dmrg/chi_max_{chi_max:d}_trunc_{TRUNC_CUT:.0e}_reduced"
     heavy_hex_distance = config['heavy_hex_distance']
     
     data = {
@@ -224,17 +184,16 @@ def load_data_for_system(n, config, jzs):
             print(f"  No DMRG data found, skipping Jz {jz}")
             continue
         
-        dmrg_result: DMRGResult = data_dmrg["result"]
-        order = dmrg_result.bfs_order
-        
+        # Reduced DMRG files store observables in heavy-hex label order (matching SKQD),
+        # so no DMRGResult / MPS / bfs_order reordering is needed.
+
         # ---- Z observable and staggered magnetization ----
         try:
             z_skqd = data_skqd["z_basis_opt"]
-            z_dmrg = dmrg_result.psi.expectation_value("Sz") * 2
-            z_dmrg = inverse_order_single_site_obs(n, order, z_dmrg)
+            z_dmrg = np.array(data_dmrg["z"])
             data['z_skqd'][jz] = np.array(z_skqd)
-            data['z_dmrg'][jz] = np.array(z_dmrg)
-            
+            data['z_dmrg'][jz] = z_dmrg
+
             # Compute staggered magnetization
             # eta determines the two-color convention from DMRG
             eta = np.sign(z_dmrg)
@@ -243,69 +202,47 @@ def load_data_for_system(n, config, jzs):
             data['ms_skqd'][jz] = float(np.mean(eta * z_skqd))
         except KeyError:
             print(f"  No z_basis_opt data for Jz {jz}")
-        
+
         # ---- ZZ correlators ----
         try:
             corrs_zz_skqd = data_skqd[f"{SKQD_NN:d}_nn_corr_funcs_zz_basis_opt"]
             pairs_zz_skqd = data_skqd[f"{SKQD_NN:d}_nn_corr_pairs_zz_basis_opt"]
-            
+
+            # Reduced DMRG pairs are already in heavy-hex labels aligned with the values.
             pairs_dmrg = data_dmrg[f"{DMRG_NN:d}_nn_corr_pairs"]
-            
-            # Compute or load DMRG ZZ correlators
-            try:
-                corrs_zz_dmrg = data_dmrg[f"{DMRG_NN:d}_nn_corr_funcs_zz"]
-            except KeyError:
-                print(f"  Computing DMRG ZZ correlators for Jz {jz}")
-                corrs_zz_dmrg = []
-                for pair in pairs_dmrg:
-                    zz_corr = dmrg_result.psi.expectation_value_term([("Sz", pair[0]), ("Sz", pair[1])]) * 4
-                    corrs_zz_dmrg.append(zz_corr)
-                data_dmrg[f"{DMRG_NN:d}_nn_corr_funcs_zz"] = corrs_zz_dmrg
-                with open(os.path.join(root_dir_dmrg, f"XXZ_2d_jz_{jz:.1f}.pkl"), "wb") as f:
-                    pickle.dump(data_dmrg, f)
-            
-            reord_pairs_dmrg, _ = inverse_order_two_site_list(n, order, pairs_dmrg, corrs_zz_dmrg, False)
-            
+            corrs_zz_dmrg = data_dmrg[f"{DMRG_NN:d}_nn_corr_funcs_zz"]
+
             # Filter to nearest neighbors
             pairs_zz_skqd = list(pairs_zz_skqd)
             corrs_zz_skqd = list(corrs_zz_skqd)
             pairs_zz_skqd, corrs_zz_skqd = filter_to_less_neighbours(
                 pairs_zz_skqd, corrs_zz_skqd, NN_TO_PLOT, heavy_hex_distance
             )
-            
-            reord_pairs_dmrg = list(reord_pairs_dmrg)
+
+            pairs_dmrg = list(pairs_dmrg)
             corrs_zz_dmrg = list(corrs_zz_dmrg)
             reord_pairs_dmrg, corrs_zz_dmrg = filter_to_less_neighbours(
-                reord_pairs_dmrg, corrs_zz_dmrg, NN_TO_PLOT, heavy_hex_distance
+                pairs_dmrg, corrs_zz_dmrg, NN_TO_PLOT, heavy_hex_distance
             )
-            
+
             data['zz_skqd'][jz] = corrs_zz_skqd
             data['zz_dmrg'][jz] = corrs_zz_dmrg
             data['zz_pairs_skqd'][jz] = pairs_zz_skqd
             data['zz_pairs_dmrg'][jz] = reord_pairs_dmrg
         except KeyError:
             print(f"  No zz_basis_opt data for Jz {jz}")
-        
+
         # ---- Z loop observables ----
         try:
             corrs_z_loop_skqd = np.asarray(data_skqd["z_loop"])
             sites_z_loop_skqd = list(data_skqd["z_loop_sites"])
-            
-            # Check if we need to compute before calling the function
-            need_to_save_z = "z_loop" not in data_dmrg or "z_loop_sites" not in data_dmrg
-            
-            corrs_z_loop_dmrg, sites_z_loop_dmrg = compute_dmrg_loop_if_missing(
-                data_dmrg, dmrg_result, sites_z_loop_skqd, key="z_loop", operator="Sz"
-            )
-            
+
+            # Reduced DMRG files carry precomputed z_loop / z_loop_sites.
+            corrs_z_loop_dmrg = np.asarray(data_dmrg["z_loop"])
+
             data['z_loop_skqd'][jz] = corrs_z_loop_skqd
             data['z_loop_dmrg'][jz] = corrs_z_loop_dmrg
             data['z_loop_sites'][jz] = sites_z_loop_skqd
-            
-            # Save updated DMRG data if we computed new loops
-            if need_to_save_z:
-                with open(os.path.join(root_dir_dmrg, f"XXZ_2d_jz_{jz:.1f}.pkl"), "wb") as f:
-                    pickle.dump(data_dmrg, f)
         except KeyError:
             print(f"  No z_loop data for Jz {jz}")
         

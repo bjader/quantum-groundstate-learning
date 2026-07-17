@@ -48,7 +48,7 @@ nn_to_plot = 2
 DIFF_VMAX = 0.1  # e.g., 0.3 to set a fixed maximum, or None for auto
 
 # SKQD data directory
-dir_skqd = "ts_1_kd_11_shots_100k_ibm_boston_1773150437_1773854302_mixed/recovery_random_flip"
+dir_skqd = "recovery_random_flip"
 root_dir_skqd = f"../../data/spins_{n}/skqd/{dir_skqd}"
 
 # ML model base directories (will find most recent)

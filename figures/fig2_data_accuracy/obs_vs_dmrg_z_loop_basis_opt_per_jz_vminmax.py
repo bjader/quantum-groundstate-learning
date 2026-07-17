@@ -16,15 +16,7 @@ from matplotlib.patches import Polygon
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from networkx.drawing.nx_agraph import graphviz_layout
 
-# Fix for unpickling objects from original /qaml/ repo
-import qaml.diagonalisation
-import qaml.diagonalisation.twod
-import qaml.diagonalisation.twod.dmrg
-sys.modules['diagonalisation'] = qaml.diagonalisation
-sys.modules['diagonalisation.twod'] = qaml.diagonalisation.twod
-sys.modules['diagonalisation.twod.dmrg'] = qaml.diagonalisation.twod.dmrg
-
-from qaml.diagonalisation.twod.dmrg import DMRGResult
+# Reduced DMRG data are plain dicts with precomputed z_loop, so no qaml unpickling shims are needed.
 from qaml.graph.graph_utils import read_edges_txt
 
 def plot_loops_heavy_hex(
@@ -158,13 +150,13 @@ def compute_dmrg_x_loop_if_missing(
 
 n = 115
 
-dir_skqd = "ts_1_kd_11_shots_100k_ibm_boston_1773150437_1773854302_mixed/recovery_random_flip"
+dir_skqd = "recovery_random_flip"
 root_dir_skqd = f"../../data/spins_{n}/skqd/{dir_skqd}"
 
 chi_max = 320
 trunc_cut = 1e-6
 dmrg_nn = 2
-root_dir_dmrg = f"../../data/spins_{n}/dmrg/chi_max_{chi_max:d}_trunc_{trunc_cut:.0e}"
+root_dir_dmrg = f"../../data/spins_{n}/dmrg/chi_max_{chi_max:d}_trunc_{trunc_cut:.0e}_reduced"
 
 jzs = [round(jz, 1) for jz in np.arange(1.1, 6.01, 0.1)]
 jzs = [1.6, 3.0, 4.0]
@@ -198,22 +190,10 @@ for jz in list(jzs):
     with open(os.path.join(root_dir_dmrg, f"XXZ_2d_jz_{jz:.1f}.pkl"), "rb") as f:
         data_dmrg = pickle.load(f)
 
-    dmrg_result: DMRGResult = data_dmrg["result"]
-
+    # Reduced DMRG files always carry precomputed z_loop / z_loop_sites.
     key = "z_loop"
-    try:
-        corrs_dmrg = np.asarray(data_dmrg[key])
-        sites_dmrg = list(data_dmrg[f"{key}_sites"])
-    except KeyError:
-        loops_to_use = sites_skqd
-        corrs_dmrg, sites_dmrg = compute_dmrg_x_loop_if_missing(
-            data_dmrg=data_dmrg,
-            dmrg_result=dmrg_result,
-            loops_old=loops_to_use,
-            key=key,
-        )
-        with open(os.path.join(root_dir_dmrg, f"XXZ_2d_jz_{jz:.1f}.pkl"), "wb") as f:
-            pickle.dump(data_dmrg, f)
+    corrs_dmrg = np.asarray(data_dmrg[key])
+    sites_dmrg = list(data_dmrg[f"{key}_sites"])
 
     if sites_dmrg != sites_skqd:
         print("Warning: sites_dmrg != sites_skqd (not aligning, as requested).")

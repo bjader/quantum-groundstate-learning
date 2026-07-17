@@ -5,7 +5,6 @@ Analyzes Z, ZZ, and Z_loop observables.
 """
 
 import logging
-import sys
 from pathlib import Path
 
 import dill as pickle
@@ -13,13 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-# Fix for unpickling objects from original /qaml/ repo
-import qaml.diagonalisation
-import qaml.diagonalisation.twod
-import qaml.diagonalisation.twod.dmrg
-sys.modules['diagonalisation'] = qaml.diagonalisation
-sys.modules['diagonalisation.twod'] = qaml.diagonalisation.twod
-sys.modules['diagonalisation.twod.dmrg'] = qaml.diagonalisation.twod.dmrg
+# Reduced DMRG data are plain dicts, so no qaml unpickling shims are needed.
 
 # Configure matplotlib to use LaTeX for text rendering (manuscript style)
 plt.rcParams.update({
@@ -123,35 +116,40 @@ def load_dmrg_observables(n_spins, chi_values, jz_values, obs_type, trunc_cut=1e
     obs_by_chi = {}
     
     for chi in chi_values:
-        dmrg_dir = base_data / f"spins_{n_spins}" / "dmrg" / f"chi_max_{chi}_trunc_{trunc_cut:.0e}"
-        
+        # NOTE: only the reduced chi=320 DMRG is provided; other chi require their own
+        # reduced folders (chi_max_{chi}_trunc_1e-06_reduced) to enable the chi extrapolation.
+        # All observables here are reduced to mean(|.|), so the reduced (plain-key) DMRG is sufficient.
+        dmrg_dir = base_data / f"spins_{n_spins}" / "dmrg" / f"chi_max_{chi}_trunc_{trunc_cut:.0e}_reduced"
+
         if not dmrg_dir.exists():
             logging.warning(f"DMRG directory not found for n={n_spins}, chi={chi}")
             continue
-            
+
         obs_data = {}
         for jz in jz_values:
             dmrg_file = dmrg_dir / f"XXZ_2d_jz_{jz:.1f}.pkl"
-            
+
             if not dmrg_file.exists():
                 continue
-                
+
             try:
                 dmrg_res = load_pickle(dmrg_file)
-                dmrg_result = dmrg_res["result"]
-                
+
                 if obs_type == 'z':
-                    obs = dmrg_result.psi.expectation_value("Sz") * 2
-                    # Use mean absolute value as scalar
-                    obs_data[jz] = np.mean(np.abs(obs))
-                    
-                elif obs_type == 'zz':
-                    if "2_nn_corr_zz" in dmrg_res:
-                        obs = np.array(dmrg_res["2_nn_corr_zz"])
+                    if "z" in dmrg_res:
+                        obs = np.array(dmrg_res["z"])
+                        # Use mean absolute value as scalar (order-independent)
                         obs_data[jz] = np.mean(np.abs(obs))
                     else:
-                        print(f"✗ MISSING 2_nn_corr_zz: n={n_spins}, chi={chi}, Jz={jz:.1f}")
-                        
+                        print(f"✗ MISSING z: n={n_spins}, chi={chi}, Jz={jz:.1f}")
+
+                elif obs_type == 'zz':
+                    if "2_nn_corr_funcs_zz" in dmrg_res:
+                        obs = np.array(dmrg_res["2_nn_corr_funcs_zz"])
+                        obs_data[jz] = np.mean(np.abs(obs))
+                    else:
+                        print(f"✗ MISSING 2_nn_corr_funcs_zz: n={n_spins}, chi={chi}, Jz={jz:.1f}")
+
                 elif obs_type == 'z_loop':
                     if "z_loop" in dmrg_res:
                         obs = np.array(dmrg_res["z_loop"])
