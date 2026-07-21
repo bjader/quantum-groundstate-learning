@@ -37,6 +37,7 @@ def mkdir_save_dir(n_spins, data_gen_method, observable_key):
     """Create directory for saving model artifacts."""
     save_dir = os.path.join(
         "ml_models",
+        "model_boundary2",
         f"spins_{n_spins}",
         data_gen_method,
         observable_key,

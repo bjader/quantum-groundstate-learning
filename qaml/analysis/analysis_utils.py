@@ -5,7 +5,7 @@ from typing import Dict, List, Callable, Any, Counter
 import networkx as nx
 import numpy as np
 from matplotlib import pyplot as plt
-from networkx.drawing.nx_agraph import graphviz_layout
+from networkx.drawing.nx_pydot import graphviz_layout
 from qiskit.transpiler import CouplingMap
 
 from qaml.observables.correlation_function import get_n_nearest_neighbours
@@ -148,7 +148,10 @@ def draw_graph(n, edges):
     G = nx.Graph()
     G.add_nodes_from(range(n))
     G.add_edges_from(edges)
-    pos = graphviz_layout(G)
+    try:
+        pos = graphviz_layout(G)
+    except Exception:
+        pos = nx.spring_layout(G, seed=42)
     nx.draw_networkx_nodes(G, pos, node_size=220)
     nx.draw_networkx_edges(G, pos, alpha=0.5, width=1.5)
     nx.draw_networkx_labels(G, pos, labels={i: i for i in range(n)}, font_size=7)
