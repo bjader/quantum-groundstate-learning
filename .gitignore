@@ -40,10 +40,8 @@ ENV/
 ml_models/
 data_generation/basis_optimization/saved_opt_res_qpu
 data_generation/basis_optimization/saved_opt_res_qpu_unified
-*.pkl
 *.h5
 *.hdf5
-!data/spins_115/**
 
 # Output directories
 results/
