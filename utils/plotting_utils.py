@@ -10,7 +10,7 @@ import networkx as nx
 import numpy as np
 from matplotlib.patches import Polygon
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from networkx.drawing.nx_agraph import graphviz_layout
+from networkx.drawing.nx_pydot import graphviz_layout
 
 from qaml.analysis.analysis_utils import filter_to_less_neighbours
 from qaml.diagonalisation.twod.dmrg import inverse_order_single_site_obs, inverse_order_two_site_list, \

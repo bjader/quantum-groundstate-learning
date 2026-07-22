@@ -19,7 +19,7 @@ import numpy as np
 import networkx as nx
 from matplotlib.patches import Polygon
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from networkx.drawing.nx_agraph import graphviz_layout
+from networkx.drawing.nx_pydot import graphviz_layout
 
 # Reduced DMRG data are plain dicts with heavy-hex-ordered observables, so no qaml
 # unpickling shims or MPS reordering helpers are needed.
@@ -81,7 +81,10 @@ def plot_loops_heavy_hex(edges, n, loops, loop_vals, cmap=plt.cm.Blues,
     G = nx.Graph()
     G.add_nodes_from(range(n))
     G.add_edges_from(edges)
-    pos = graphviz_layout(G)
+    try:
+        pos = graphviz_layout(G)
+    except Exception:
+        pos = nx.spring_layout(G, seed=42)
 
     fig, ax = plt.subplots(constrained_layout=False)
 

@@ -55,7 +55,7 @@ CONFIG = {
 # ---------------------------------------------------------------------------
 
 def mkdir_save_dir(n_spins, data_gen_method, observable_key):
-    save_dir = os.path.join("model2", f"spins_{n_spins}",
+    save_dir = os.path.join("ml_models", "model2", f"spins_{n_spins}",
                             data_gen_method,
                             observable_key,
                             str(datetime.now()).replace(" ", "-"))

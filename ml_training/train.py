@@ -19,7 +19,7 @@ from qaml.ml.hyperparameter_utils import initialize_hyperparams
 
 
 def mkdir_save_dir(n_spins, data_gen_method, observable_key):
-    save_dir = os.path.join("model", f"spins_{n_spins}",
+    save_dir = os.path.join("ml_models", "model", f"spins_{n_spins}",
                             data_gen_method,
                             observable_key,
                             str(datetime.now()).replace(" ", "-"))

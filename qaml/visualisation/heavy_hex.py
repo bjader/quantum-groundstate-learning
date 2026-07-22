@@ -60,7 +60,10 @@ def plot_sz_heavy_hex(edges, n, sz_list):
     G = nx.Graph()
     G.add_nodes_from(range(n))
     G.add_edges_from(edges)
-    pos = graphviz_layout(G)
+    try:
+        pos = graphviz_layout(G)
+    except Exception:
+        pos = nx.spring_layout(G, seed=42)
     vmin, vmax = -0.5, 0.5
     nodes = nx.draw_networkx_nodes(
         G, pos, node_size=220, node_color=sz_list, vmin=vmin, vmax=vmax, cmap="coolwarm"
@@ -91,7 +94,10 @@ def plot_corr_heavy_hex(edges, n, corr_list, sz_list=None, cmap=plt.cm.seismic, 
     G = nx.Graph()
     G.add_nodes_from(range(n))
     G.add_edges_from(edges)
-    pos = graphviz_layout(G)
+    try:
+        pos = graphviz_layout(G)
+    except Exception:
+        pos = nx.spring_layout(G, seed=42)
 
     fig, ax = plt.subplots(constrained_layout=False)
 
